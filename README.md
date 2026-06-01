@@ -70,8 +70,8 @@ O projeto foi validado por meio de uma base de telemetria rica (`dados.csv`), qu
 
 **Turma:** 1CCOA-2026
 
-| Nome | RM | Papel no Projeto |
+| Nome | RM |
 | --- | --- | --- |
-| **Flávia Roberta Pennachin** | RM561860 | Ingestão, Estruturas de Dados e Narrativa/Modelo de Negócio |
-| **Juan de Lucas Frois** | RM563260 | Diagnóstico, Falhas em Cascata e Protocolo de Votação de Sensores |
-| **Pedro Valente Toledo** | RM570394 | Motor de Decisão, Score de Saúde e Regressão Linear Preditiva |
+| **Flávia Roberta Pennachin** | RM561860 |
+| **Juan de Lucas Frois** | RM563260 |
+| **Pedro Valente Toledo** | RM570394 |
