@@ -71,7 +71,7 @@ O projeto foi validado por meio de uma base de telemetria rica (`dados.csv`), qu
 **Turma:** 1CCOA-2026
 
 | Nome | RM |
-| --- | --- | --- |
+| --- | --- |
 | **Flávia Roberta Pennachin** | RM561860 |
 | **Juan de Lucas Frois** | RM563260 |
 | **Pedro Valente Toledo** | RM570394 |
