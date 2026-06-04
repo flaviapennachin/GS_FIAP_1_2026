@@ -162,56 +162,111 @@ def calcular_previsao_energia(historico_baterias):
 # =====================================================================
 # REQUISITO 8.4: MOTOR DE DECISÃO (AÇÕES AUTOMÁTICAS E RECOMENDAÇÕES)
 # =====================================================================
-def gerar_recomendacoes(resultado_diagnostico, cascata, dados_turno):
+def gerar_recomendacoes(resultado_diagnostico, cascata, dados_turno, score_atual):
     """
-    Avalia o diagnóstico de todos os sistemas e gera um plano de ação automatizado,
-    cobrindo energia, comunicação e saúde da tripulação.
+    Avalia o diagnóstico e o score de saúde gerando um plano de ação automatizado.
     """
     acoes = []
 
-    # 1. Prioridade Máxima: Efeito Cascata
     if cascata:
         acoes.append(
-            "[!] PROTOCOLO OMEGA: Risco de perda da colônia. Redirecionar toda energia restante para Suporte à Vida."
+            "[!] PROTOCOLO OMEGA: Risco de perda da colônia. Redirecionar energia para Suporte à Vida."
         )
 
-    # 2. Resoluções de Energia
     if resultado_diagnostico.get("energia") == "crítico":
         acoes.append(
-            "-> Protocolo de Economia Severa: Desligar Laboratório e hibernar aquecimento secundário."
+            "-> Protocolo Economia: Desligar Laboratório e hibernar aquecimento secundário."
         )
     elif resultado_diagnostico.get("energia") == "alerta":
-        acoes.append(
-            "-> Ajuste de Carga: Monitorar baterias de perto e preparar desligamento de módulos não essenciais."
-        )
+        acoes.append("-> Ajuste de Carga: Monitorar baterias de perto.")
 
-    # 3. Resoluções Médicas e de Saúde (Atendendo à sua ideia de usar as métricas)
     if resultado_diagnostico.get("suporte_medico") == "crítico":
         acoes.append(
-            "-> Emergência Médica: Sistemas de monitoramento inoperantes. Realizar checagem manual da tripulação."
+            "-> Emergência Médica: Sistemas inoperantes. Realizar checagem manual da tripulação."
         )
     elif dados_turno.get("sinais_vitais_tripulantes_pct", 100) < 90:
-        # Se os sinais vitais caírem por stress (ex: durante o micrometeoro)
         acoes.append(
-            "-> Atenção Tripulação: Sinais vitais em queda. Distribuir kit médico e aplicar protocolo anti-stress."
+            "-> Atenção Tripulação: Sinais vitais em queda. Distribuir kit médico."
         )
 
-    # 4. Resoluções de Comunicação
     if resultado_diagnostico.get("comunicacao") == "crítico":
         if dados_turno.get("janela_comunicacao") == "fechada":
+            acoes.append("-> Isolamento Tático: Manter operações 100% autônomas.")
+        else:
+            acoes.append("-> Falha de Link: Reiniciar módulo de satélite.")
+
+    if len(acoes) == 0:
+        if score_atual < 75 or "alerta" in resultado_diagnostico.values():
             acoes.append(
-                "-> Isolamento Tático: Executar rotinas de manutenção 100% autônomas até a reabertura da janela orbital."
+                "-> Atenção: Desvios operacionais detectados. Nível de alerta amarelo. Revisar parâmetros."
             )
         else:
-            acoes.append(
-                "-> Falha de Link: Reiniciar módulo de satélite e recalibrar antenas de rádio/laser."
-            )
-
-    # 5. Se tudo estiver nominal
-    if len(acoes) == 0:
-        acoes.append("-> Sistemas estáveis. Manter operações de rotina.")
+            acoes.append("-> Sistemas 100% estáveis. Manter operações de rotina.")
 
     return acoes
+
+
+# =====================================================================
+# REQUISITO NEXT: SCORE DE SAÚDE DA MISSÃO (Índice 0-100)
+# =====================================================================
+
+
+def calcular_score_saude(hierarquia, evento, previsao_texto):
+    """
+    Calcula um índice composto (0-100) refletindo a saúde geral da missão:
+    40% Energia, 30% Módulos Operacionais, 20% Eventos, 10% Tendência.
+    """
+    score = 0.0
+
+    # 1. Peso Energia (Máximo: 40 pontos)
+    reserva = hierarquia["energia"]["armazenamento"]
+    score += (reserva / 100.0) * 40.0
+
+    # 2. Peso Módulos Operacionais (Máximo: 30 pontos)
+    # Avaliamos 5 módulos principais para a métrica de saúde
+    modulos = [
+        hierarquia["habitacao"]["modulo_habitacional"],
+        hierarquia["suporte_vida"]["oxigenio"],
+        hierarquia["comunicacao"]["satellite"],
+        hierarquia["laboratorio"]["analise_solo"],
+        hierarquia["suporte_medico"]["monitoramento_saude"],
+    ]
+    ativos = sum(modulos)
+    score += (ativos / 5.0) * 30.0
+
+    # 3. Peso Eventos Externos (Máximo: 20 pontos)
+    if "Sem eventos externos" in evento:
+        score += 20.0
+    elif "Tempestade de areia" in evento:
+        score += 10.0  # Penalização parcial (situação administrável)
+    else:
+        score += 0.0  # Penalização máxima (Tempestade solar ou micrometeoro)
+
+    # 4. Peso Tendência / Previsão (Máximo: 10 pontos)
+    if "Positiva" in previsao_texto or "Estável" in previsao_texto:
+        score += 10.0
+    else:
+        score += 0.0  # Tendência de queda retira os pontos
+
+    # Arredondar e garantir que fica estritamente entre 0 e 100
+    return max(0, min(100, int(score)))
+
+
+def gerar_barra_score(score):
+    """Gera uma representação visual do score em formato ASCII."""
+    tamanho_barra = 20
+    preenchido = int((score / 100) * tamanho_barra)
+    vazio = tamanho_barra - preenchido
+
+    # Define o indicador visual de estado
+    if score >= 75:
+        cor = "🟢 [NOMINAL]"
+    elif score >= 40:
+        cor = "🟡 [ALERTA] "
+    else:
+        cor = "🔴 [CRÍTICO]"
+
+    return f"{cor} [{'█' * preenchido}{'-' * vazio}] {score}%"
 
 
 # =====================================================================
@@ -414,18 +469,19 @@ def organizar_turno(dados_turno):
 
 
 # =====================================================================
-# PIPELINE PRINCIPAL (Execução)
+# PIPELINE PRINCIPAL (Execução e Exportação)
 # =====================================================================
 def main():
     exibir_introducao_aurora()
 
     df = pd.read_csv(csv_path)
-    print(
-        f"Matriz de telemetria histórica carregada com sucesso. ({len(df)} registros para análise).\n"
-    )
+    print(f"Matriz de telemetria carregada. ({len(df)} registros para análise).\n")
     time.sleep(1.0)
 
     matriz_telemetria = df.to_dict(orient="records")
+
+    # LISTA PARA EXTRAÇÃO DOS DADOS ORGANIZADOS
+    dados_exportacao = []
 
     for turno_atual in matriz_telemetria:
         organizar_turno(turno_atual)
@@ -435,44 +491,74 @@ def main():
         resultado = diagnosticar(hierarquia_sistemas_colonia)
         cascata = detectar_cascata(resultado)
         previsao_energia = calcular_previsao_energia(historico_baterias)
-        lista_acoes = gerar_recomendacoes(resultado, cascata, turno_atual)
 
-        # Painel de monitoramento operacional completo
-        print(
-            f"» SOL-TURNO: {turno_atual['turno']:03d} | Horário: {turno_atual['hora']} | Cenário: {turno_atual['cenario']}"
+        score_atual = calcular_score_saude(
+            hierarquia_sistemas_colonia, evento, previsao_energia
         )
 
-        # Delay/Janela de Comunicação
-        if hierarquia_sistemas_colonia["comunicacao"]["janela_contato"] == "fechada":
+        # Chamada atualizada com o score
+        lista_acoes = gerar_recomendacoes(resultado, cascata, turno_atual, score_atual)
+
+        # 1. PREPARAÇÃO DOS DADOS PARA A TABELA (VERIFICAÇÃO)
+        sol_marciano = ((turno_atual["turno"] - 1) // 6) + 1
+        dados_exportacao.append(
+            {
+                "Turno": turno_atual["turno"],
+                "Sol": sol_marciano,
+                "Hora": turno_atual["hora"],
+                "Cenário": turno_atual["cenario"],
+                "Score Saúde (%)": score_atual,
+                "Baterias (%)": round(
+                    hierarquia_sistemas_colonia["energia"]["armazenamento"], 1
+                ),
+                "Evento": turno_atual["evento_externo"],
+                "Diagnóstico": str(resultado),
+                "Ações Recomendadas": " | ".join(lista_acoes),
+            }
+        )
+
+        # 2. LÓGICA DO PASSO 5: Imprimir no terminal apenas o fecho do dia (04:00) ou eventos críticos
+        if turno_atual["hora"] == "04:00" or cascata or score_atual < 40:
+            barra_visual = gerar_barra_score(score_atual)
             print(
-                "  [!] AVISO: Janela de comunicação fechada. Operando em MODO AUTÔNOMO."
+                f"» RELATÓRIO DE FECHO - SOL {sol_marciano:02d} | Turno: {turno_atual['turno']:03d} | Cenário: {turno_atual['cenario']}"
             )
-        else:
-            print("  [+] Conexão com a Terra: ESTABELECIDA.")
+            print(f"  SAÚDE DA MISSÃO: {barra_visual}")
 
-        print(
-            f"  Geração Solar Atual: {hierarquia_sistemas_colonia['energia']['solar']:.2f} kWh"
-        )
-        print(f"  Consumo de Energia: {turno_atual['consumo_kwh']:.2f} kWh")
-        print(
-            f"  Capacidade das Baterias: {hierarquia_sistemas_colonia['energia']['armazenamento']:.2f}%"
-        )
-        print("-" * 85)
-        print(f"  Evento Externo: {evento}")
-        print(f"  Diagnóstico: {resultado}")
-        print(f"  {previsao_energia}")
+            if (
+                hierarquia_sistemas_colonia["comunicacao"]["janela_contato"]
+                == "fechada"
+            ):
+                print("  [!] Janela Fechada (MODO AUTÔNOMO).")
 
-        if cascata:
-            print(f"  Alerta de cascata!: {cascata}")
+            print(
+                f"  Baterias: {hierarquia_sistemas_colonia['energia']['armazenamento']:.1f}%"
+            )
+            print(f"  Eventos do Dia: {evento}")
+            print(f"  {previsao_energia}")
 
-        # Imprimindo as recomendações geradas
-        print("\n  [PLANO DE AÇÃO AUTOMATIZADO]:")
-        for acao in lista_acoes:
-            print(f"    {acao}")
-        print("-" * 85)
-        time.sleep(0.05)
+            if cascata:
+                print(f"  Alerta Crítico!: {cascata}")
 
-    print("\n[SIMULAÇÃO CONCLUÍDA] 56 Sóis marcianos processados com sucesso.")
+            print("  [PLANO DE AÇÃO DIÁRIO]:")
+            for acao in lista_acoes:
+                print(f"    {acao}")
+
+            print("=" * 85)
+            time.sleep(0.1)
+
+    # 3. EXTRAÇÃO FINAL PARA TABELA (CSV)
+    print("\n[SIMULAÇÃO CONCLUÍDA] 56 Sóis marcianos processados.")
+
+    # Cria a pasta docs se não existir
+    docs_dir = base_dir.parent / "docs"
+    docs_dir.mkdir(exist_ok=True)
+
+    caminho_exportacao = docs_dir / "relatorio_execucao_aurora.csv"
+    df_exportacao = pd.DataFrame(dados_exportacao)
+    df_exportacao.to_csv(caminho_exportacao, index=False)
+
+    print(f"[EXTRAÇÃO] Tabela de auditoria salva com sucesso em: {caminho_exportacao}")
 
 
 if __name__ == "__main__":
