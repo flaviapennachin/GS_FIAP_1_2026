@@ -1,11 +1,11 @@
 import pandas as pd
 from pathlib import Path
 import time
+import numpy as np
 
 # =====================================================================
 # REQUISITO 8.2: ESTRUTURAS DE DADOS
 # =====================================================================
-
 fila_alertas = []  # alertas por prioridade
 pilha_eventos_criticos = []  # últimos eventos analisados
 
@@ -55,9 +55,9 @@ hierarquia_sistemas_colonia = {
 # =====================================================================
 # REQUISITO 8.1: LEITURA E INGESTÃO DE DADOS
 # =====================================================================
-
 base_dir = Path(__file__).resolve().parent
-csv_path = base_dir.parent / "data" / "dados_telemetria_marte.csv"
+# csv_path = base_dir.parent / "data" / "dados_telemetria_marte.csv"
+csv_path = base_dir.parent / "data" / "GS - All Data.csv"
 
 
 def exibir_introducao_aurora():
@@ -80,8 +80,6 @@ def exibir_introducao_aurora():
 # =====================================================================
 # REQUISITO 8.3 / 8.4: MOTOR DE EVENTOS EXTERNOS
 # =====================================================================
-
-
 def processar_evento_externo(turno):
     # classifica o evento externo do turno e retorna descrição do impacto operacional
     if turno["evento_externo"] == "nenhum":
@@ -99,8 +97,6 @@ def processar_evento_externo(turno):
 # =====================================================================
 # REQUISITO 8.3 (NEXT): PROTOCOLO DE VOTAÇÃO DE SENSORES
 # =====================================================================
-
-
 def votar_sensor(historico_temperatura, turno_atual):
     # detecta leitura inválida (-999) e estima valor real pela média histórica
     if turno_atual["temp_interna"] == -999:
@@ -119,10 +115,53 @@ def votar_sensor(historico_temperatura, turno_atual):
 
 
 # =====================================================================
+# REQUISITO 8.5: ANÁLISE E PREVISÃO DE DADOS COM NUMPY
+# =====================================================================
+def calcular_previsao_energia(historico_baterias):
+    """
+    Aplica Regressão Linear Simples (NumPy) sobre o histórico recente das baterias
+    para prever a tendência e estimar o tempo até ao colapso energético.
+    """
+    # Precisamos de pelo menos 6 turnos (1 Sol marciano) para ter uma base de cálculo fiável
+    if len(historico_baterias) < 6:
+        return "[PREVISÃO] A aguardar recolha de dados suficientes..."
+
+    # Analisar a tendência dos últimos 18 turnos (3 Sóis) para sermos reativos a mudanças climáticas súbitas
+    dados_recentes = (
+        historico_baterias[-18:]
+        if len(historico_baterias) >= 18
+        else historico_baterias
+    )
+
+    eixo_x = np.arange(len(dados_recentes))
+    eixo_y = np.array(dados_recentes)
+
+    # Regressão linear (polinómio de grau 1: y = ax + b)
+    # inclinacao = a (taxa de variação), intersecao = b (ponto inicial)
+    coeficientes = np.polyfit(eixo_x, eixo_y, 1)
+    inclinacao = coeficientes[0]
+    intersecao = coeficientes[1]
+
+    if inclinacao >= 0:
+        return "[PREVISÃO] Tendência Energética Positiva/Estável. Colapso improvável a curto prazo."
+    else:
+        # Calcular quantos turnos faltam para o eixo_y (bateria) chegar a 0
+        # 0 = inclinacao * turno_futuro + intersecao -> turno_futuro = -intersecao / inclinacao
+        turno_zero = -intersecao / inclinacao
+
+        # turnos restantes a partir do momento atual
+        turnos_restantes = turno_zero - (len(dados_recentes) - 1)
+
+        if turnos_restantes <= 0:
+            return "🚨 [PREVISÃO CRÍTICA] Baterias em colapso total iminente!"
+        else:
+            dias_restantes = turnos_restantes / 6.0
+            return f"🚨 [PREVISÃO CRÍTICA] Mantendo-se a queda atual, as baterias esgotarão em {dias_restantes:.1f} Sóis marcianos."
+
+
+# =====================================================================
 # REQUISITO 8.3: MOTOR DE DIAGNÓSTICO — REGRAS LÓGICAS
 # =====================================================================
-
-
 def diagnosticar(hierarquia_sistemas_colonia):
     # avalia cada sistema da colônia e classifica em normal, alerta ou crítico
     resultado = {}
@@ -214,8 +253,6 @@ def diagnosticar(hierarquia_sistemas_colonia):
 # =====================================================================
 # REQUISITO 8.4: DETECÇÃO DE FALHAS EM CASCATA
 # =====================================================================
-
-
 def detectar_cascata(resultado):
     # verifica combinações de falhas simultâneas que indicam encadeamento crítico
     if resultado["energia"] == "crítico" and resultado["comunicacao"] == "crítico":
@@ -342,31 +379,36 @@ def main():
         sensor = votar_sensor(historico_temperatura, turno_atual)
         resultado = diagnosticar(hierarquia_sistemas_colonia)
         cascata = detectar_cascata(resultado)
+        previsao_energia = calcular_previsao_energia(historico_baterias)
 
         # Painel de monitoramento operacional completo
         print(
             f"» SOL-TURNO: {turno_atual['turno']:03d} | Horário: {turno_atual['hora']} | Cenário: {turno_atual['cenario']}"
         )
+
+        # Delay/Janela de Comunicação
+        if hierarquia_sistemas_colonia["comunicacao"]["janela_contato"] == "fechada":
+            print(
+                "  [!] AVISO: Janela de comunicação fechada. Operando em MODO AUTÔNOMO."
+            )
+        else:
+            print("  [+] Conexão com a Terra: ESTABELECIDA.")
+
         print(
             f"  Geração Solar Atual: {hierarquia_sistemas_colonia['energia']['solar']:.2f} kWh"
-        )
-        print(
-            f"  Geração Eólica Atual: {hierarquia_sistemas_colonia['energia']['eolica']:.2f} kWh"
         )
         print(f"  Consumo de Energia: {turno_atual['consumo_kwh']:.2f} kWh")
         print(
             f"  Capacidade das Baterias: {hierarquia_sistemas_colonia['energia']['armazenamento']:.2f}%"
         )
-        print(f"  Alertas - Quantidade Atual: {len(fila_alertas)}")
-        print(
-            f"  Último Evento Crítico: {pilha_eventos_criticos[-1] if pilha_eventos_criticos else 'Nenhum'}"
-        )
         print("-" * 85)
         print(f"  Evento Externo: {evento}")
-        print(f"  Sensor Temperatura: {sensor}")
         print(f"  Diagnóstico: {resultado}")
+        print(f"  {previsao_energia}")
+
         if cascata:
             print(f"  Alerta de cascata!: {cascata}")
+        print("-" * 85)
         time.sleep(0.05)
 
     print("\n[SIMULAÇÃO CONCLUÍDA] 56 Sóis marcianos processados com sucesso.")
