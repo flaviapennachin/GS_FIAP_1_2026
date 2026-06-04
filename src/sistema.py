@@ -99,7 +99,7 @@ def votar_sensor(historico_temperatura, turno_atual):
         historico_temperatura.append(turno_atual["temp_interna"])
         return f"Temperatura interna: {turno_atual['temp_interna']:.1f}°C"
        
-def diagnosticar(hierarquia_sistemas_colonia, turno_atual):
+def diagnosticar(hierarquia_sistemas_colonia):
 
     resultado = {}
 
@@ -249,7 +249,7 @@ def main():
         
         evento = processar_evento_externo(turno_atual)
         sensor = votar_sensor(historico_temperatura, turno_atual)
-        resultado = diagnosticar(hierarquia_sistemas_colonia,turno_atual)
+        resultado = diagnosticar(hierarquia_sistemas_colonia)
         cascata = detectar_cascata(resultado)
 
        # Painel de monitoramento operacional completo
