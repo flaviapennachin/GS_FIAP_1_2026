@@ -8,6 +8,7 @@ import numpy as np
 # =====================================================================
 fila_alertas = []  # alertas por prioridade
 pilha_eventos_criticos = []  # últimos eventos analisados
+fila_transmissao_terra = []  # Fila FIFO para pacotes de telemetria pendentes
 
 # ESTRUTURA PARA ANÁLISE DE EFICIÊNCIA ENERGÉTICA
 historico_baterias = []  # monitoramento de ciclos de carga
@@ -52,6 +53,7 @@ hierarquia_sistemas_colonia = {
         "nivel_medicamentos_pct": 100.0,  # quantidade física no estoque (0-100%)
     },
 }
+
 # =====================================================================
 # REQUISITO 8.1: LEITURA E INGESTÃO DE DADOS
 # =====================================================================
@@ -81,24 +83,22 @@ def exibir_introducao_aurora():
 # REQUISITO 8.3 / 8.4: MOTOR DE EVENTOS EXTERNOS
 # =====================================================================
 def processar_evento_externo(turno):
-    # classifica o evento externo do turno e retorna descrição do impacto operacional
     if turno["evento_externo"] == "nenhum":
         return "Sem eventos externos. Operação nominal."
     elif turno["evento_externo"] == "tempestade_areia":
-        return "Tempestade de areia detectada. Geração solar comprometida e visibilidade reduzida"
+        return "Tempestade de areia detectada. Geração solar comprometida e visibilidade reduzida."
     elif turno["evento_externo"] == "tempestade_solar":
         return "Tempestade solar em curso. Comunicação instável e radiação elevada."
     elif turno["evento_externo"] == "micrometeoro":
         return "Impacto de micrometeoro detectado. Possível falha de sensor."
     else:
-        return "Um evento externo não identificado acaba de ocorrer"
+        return "Um evento externo não identificado acaba de ocorrer."
 
 
 # =====================================================================
 # REQUISITO 8.3 (NEXT): PROTOCOLO DE VOTAÇÃO DE SENSORES
 # =====================================================================
 def votar_sensor(historico_temperatura, turno_atual):
-    # detecta leitura inválida (-999) e estima valor real pela média histórica
     if turno_atual["temp_interna"] == -999:
         if len(historico_temperatura) == 0:
             return "Sensor falho e sem histórico disponível para recuperação."
@@ -109,7 +109,6 @@ def votar_sensor(historico_temperatura, turno_atual):
             media = soma / len(historico_temperatura)
             return f"[VOTAÇÃO] Sensor falho. Valor estimado por média histórica: {media:.1f}°C"
     else:
-        # leitura válida: registra no histórico e retorna o valor atual
         historico_temperatura.append(turno_atual["temp_interna"])
         return f"Temperatura interna: {turno_atual['temp_interna']:.1f}°C"
 
@@ -118,15 +117,9 @@ def votar_sensor(historico_temperatura, turno_atual):
 # REQUISITO 8.5: ANÁLISE E PREVISÃO DE DADOS COM NUMPY
 # =====================================================================
 def calcular_previsao_energia(historico_baterias):
-    """
-    Aplica Regressão Linear Simples (NumPy) sobre o histórico recente das baterias
-    para prever a tendência e estimar o tempo até ao colapso energético.
-    """
-    # Precisamos de pelo menos 6 turnos (1 Sol marciano) para ter uma base de cálculo fiável
     if len(historico_baterias) < 6:
         return "[PREVISÃO] A aguardar recolha de dados suficientes..."
 
-    # Analisar a tendência dos últimos 18 turnos (3 Sóis) para sermos reativos a mudanças climáticas súbitas
     dados_recentes = (
         historico_baterias[-18:]
         if len(historico_baterias) >= 18
@@ -136,8 +129,6 @@ def calcular_previsao_energia(historico_baterias):
     eixo_x = np.arange(len(dados_recentes))
     eixo_y = np.array(dados_recentes)
 
-    # Regressão linear (polinómio de grau 1: y = ax + b)
-    # inclinacao = a (taxa de variação), intersecao = b (ponto inicial)
     coeficientes = np.polyfit(eixo_x, eixo_y, 1)
     inclinacao = coeficientes[0]
     intersecao = coeficientes[1]
@@ -145,11 +136,7 @@ def calcular_previsao_energia(historico_baterias):
     if inclinacao >= 0:
         return "[PREVISÃO] Tendência Energética Positiva/Estável. Colapso improvável a curto prazo."
     else:
-        # Calcular quantos turnos faltam para o eixo_y (bateria) chegar a 0
-        # 0 = inclinacao * turno_futuro + intersecao -> turno_futuro = -intersecao / inclinacao
         turno_zero = -intersecao / inclinacao
-
-        # turnos restantes a partir do momento atual
         turnos_restantes = turno_zero - (len(dados_recentes) - 1)
 
         if turnos_restantes <= 0:
@@ -163,9 +150,6 @@ def calcular_previsao_energia(historico_baterias):
 # REQUISITO 8.4: MOTOR DE DECISÃO (AÇÕES AUTOMÁTICAS E RECOMENDAÇÕES)
 # =====================================================================
 def gerar_recomendacoes(resultado_diagnostico, cascata, dados_turno, score_atual):
-    """
-    Avalia o diagnóstico e o score de saúde gerando um plano de ação automatizado.
-    """
     acoes = []
 
     if cascata:
@@ -207,23 +191,13 @@ def gerar_recomendacoes(resultado_diagnostico, cascata, dados_turno, score_atual
 
 
 # =====================================================================
-# REQUISITO NEXT: SCORE DE SAÚDE DA MISSÃO (Índice 0-100)
+# REQUISITO NEXT: SCORE DE SAÚDE DA MISSÃO E COMUNICAÇÃO DE ESPAÇO PROFUNDO
 # =====================================================================
-
-
 def calcular_score_saude(hierarquia, evento, previsao_texto):
-    """
-    Calcula um índice composto (0-100) refletindo a saúde geral da missão:
-    40% Energia, 30% Módulos Operacionais, 20% Eventos, 10% Tendência.
-    """
     score = 0.0
-
-    # 1. Peso Energia (Máximo: 40 pontos)
     reserva = hierarquia["energia"]["armazenamento"]
     score += (reserva / 100.0) * 40.0
 
-    # 2. Peso Módulos Operacionais (Máximo: 30 pontos)
-    # Avaliamos 5 módulos principais para a métrica de saúde
     modulos = [
         hierarquia["habitacao"]["modulo_habitacional"],
         hierarquia["suporte_vida"]["oxigenio"],
@@ -234,31 +208,26 @@ def calcular_score_saude(hierarquia, evento, previsao_texto):
     ativos = sum(modulos)
     score += (ativos / 5.0) * 30.0
 
-    # 3. Peso Eventos Externos (Máximo: 20 pontos)
     if "Sem eventos externos" in evento:
         score += 20.0
     elif "Tempestade de areia" in evento:
-        score += 10.0  # Penalização parcial (situação administrável)
+        score += 10.0
     else:
-        score += 0.0  # Penalização máxima (Tempestade solar ou micrometeoro)
+        score += 0.0
 
-    # 4. Peso Tendência / Previsão (Máximo: 10 pontos)
     if "Positiva" in previsao_texto or "Estável" in previsao_texto:
         score += 10.0
     else:
-        score += 0.0  # Tendência de queda retira os pontos
+        score += 0.0
 
-    # Arredondar e garantir que fica estritamente entre 0 e 100
     return max(0, min(100, int(score)))
 
 
 def gerar_barra_score(score):
-    """Gera uma representação visual do score em formato ASCII."""
     tamanho_barra = 20
     preenchido = int((score / 100) * tamanho_barra)
     vazio = tamanho_barra - preenchido
 
-    # Define o indicador visual de estado
     if score >= 75:
         cor = "🟢 [NOMINAL]"
     elif score >= 40:
@@ -269,13 +238,61 @@ def gerar_barra_score(score):
     return f"{cor} [{'█' * preenchido}{'-' * vazio}] {score}%"
 
 
+def calcular_atraso_total(cenario, qualidade_sinal):
+    if cenario == 1:
+        tempo_luz = 4.3
+    elif cenario == 2:
+        tempo_luz = 12.5
+    elif cenario == 3:
+        tempo_luz = 21.0
+    else:
+        tempo_luz = 10.2
+
+    penalidade_maxima = 20.0
+    atraso_rede = (1.0 - qualidade_sinal) * penalidade_maxima
+    return tempo_luz + atraso_rede
+
+
+def gerir_transmissao_terra(hierarquia, cenario, relatorio_atual):
+    janela = hierarquia["comunicacao"]["janela_contato"]
+    radio = hierarquia["comunicacao"]["radio"]
+    laser = hierarquia["comunicacao"]["laser"]
+
+    if janela == "fechada":
+        fila_transmissao_terra.append(relatorio_atual)
+        return f"  [!] TRANSMISSÃO RETIDA: Janela fechada. Pacote guardado na fila (Pendentes: {len(fila_transmissao_terra)})."
+
+    if laser >= radio:
+        canal_escolhido = "LASER ÓTICO"
+        sinal = laser
+    else:
+        canal_escolhido = "ONDAS DE RÁDIO"
+        sinal = radio
+
+    atraso_minutos = calcular_atraso_total(cenario, sinal)
+    qtd_antigas = len(fila_transmissao_terra)
+
+    while len(fila_transmissao_terra) > 0:
+        pacote_atrasado = fila_transmissao_terra.pop(0)
+
+    if qtd_antigas > 0:
+        msg_batch = f"  [+] TRANSMISSÃO BATCH INICIADA: {qtd_antigas} pacote(s) atrasado(s) + 1 pacote atual."
+    else:
+        msg_batch = f"  [+] TRANSMISSÃO INICIADA: 1 pacote atual enviado."
+
+    logs = [
+        msg_batch,
+        f"  [+] Via: Rede de Espaço Profundo ({canal_escolhido}) | Força do Sinal: {sinal*100:.1f}%",
+        f"  [+] Tempo de Voo Estimado (ETA na Terra): {atraso_minutos:.1f} minutos.",
+    ]
+    return "\n".join(logs)
+
+
 # =====================================================================
 # REQUISITO 8.3: MOTOR DE DIAGNÓSTICO — REGRAS LÓGICAS
 # =====================================================================
 def diagnosticar(hierarquia_sistemas_colonia):
-    # avalia cada sistema da colônia e classifica em normal, alerta ou crítico
     resultado = {}
-    # extração de variáveis para legibilidade
     radio = hierarquia_sistemas_colonia["comunicacao"]["radio"] * 100
     laser = hierarquia_sistemas_colonia["comunicacao"]["laser"] * 100
     energia_armazenada = hierarquia_sistemas_colonia["energia"]["armazenamento"]
@@ -295,46 +312,43 @@ def diagnosticar(hierarquia_sistemas_colonia):
         "temperatura_interna"
     ]
 
-    analise_solo = hierarquia_sistemas_colonia["laboratorio"]["analise_solo"]  # 0 ou 1
-    analise_biologica = hierarquia_sistemas_colonia["laboratorio"][
-        "analise_biologica"
-    ]  # 0 ou 1
+    analise_solo = hierarquia_sistemas_colonia["laboratorio"]["analise_solo"]
+    analise_biologica = hierarquia_sistemas_colonia["laboratorio"]["analise_biologica"]
 
     monitoramento_saude = hierarquia_sistemas_colonia["suporte_medico"][
         "monitoramento_saude"
-    ]  # 0 ou 1
+    ]
     estoque_medicamentos = hierarquia_sistemas_colonia["suporte_medico"][
         "estoque_medicamentos"
-    ]  # 0 ou 1
+    ]
 
-    # diagnóstico de energia: normal >= 50%, alerta >= 20%, crítico < 20%
     if energia_armazenada <= 100 and energia_armazenada >= 50:
         resultado["energia"] = "normal"
     elif energia_armazenada < 50 and energia_armazenada >= 20:
         resultado["energia"] = "alerta"
     else:
         resultado["energia"] = "crítico"
-    # diagnóstico de comunicação: baseado em sinal de rádio e laser (0-100)
+
     if radio >= 50 and laser >= 50:
         resultado["comunicacao"] = "normal"
     elif radio >= 20 and laser >= 20:
         resultado["comunicacao"] = "alerta"
     else:
         resultado["comunicacao"] = "crítico"
-    # módulo de satélite desligado força status crítico independente dos sinais
+
     if not sattelite == 1:
         resultado["comunicacao"] = "crítico"
-    # diagnóstico de suporte à vida: baseado em reservas de água e alimentos
+
     if agua >= 70 and alimentos >= 70:
         resultado["suporte_vida"] = "normal"
     elif agua >= 40 and alimentos >= 40:
         resultado["suporte_vida"] = "alerta"
     else:
         resultado["suporte_vida"] = "crítico"
-    # falha no oxigênio força status crítico independente das reservas
+
     if not oxigenio == 1:
         resultado["suporte_vida"] = "crítico"
-    # diagnóstico de habitação: baseado na temperatura interna (°C)
+
     if temperatura_interna >= 18 and temperatura_interna <= 26:
         resultado["habitacao"] = "normal"
     elif (temperatura_interna >= 10 and temperatura_interna <= 18) or (
@@ -343,19 +357,19 @@ def diagnosticar(hierarquia_sistemas_colonia):
         resultado["habitacao"] = "alerta"
     elif temperatura_interna < 10 or temperatura_interna > 35:
         resultado["habitacao"] = "crítico"
-    # falha no climatizador ou módulo habitacional força status crítico
+
     if (not sistema_climatizacao == 1) or (not modulo_habitacional == 1):
         resultado["habitacao"] = "crítico"
-    # diagnóstico de laboratório: crítico se qualquer estação estiver inoperante
+
     if (not analise_solo == 1) or (not analise_biologica == 1):
         resultado["laboratorio"] = "crítico"
     else:
         resultado["laboratorio"] = "normal"
-    # diagnóstico de suporte médico: crítico se qualquer subsistema estiver inoperante
+
     if (not monitoramento_saude == 1) or (not estoque_medicamentos == 1):
         resultado["suporte_medico"] = "crítico"
     else:
-        resultado["laboratorio"] = "normal"
+        resultado["suporte_medico"] = "normal"
 
     return resultado
 
@@ -364,39 +378,38 @@ def diagnosticar(hierarquia_sistemas_colonia):
 # REQUISITO 8.4: DETECÇÃO DE FALHAS EM CASCATA
 # =====================================================================
 def detectar_cascata(resultado):
-    # verifica combinações de falhas simultâneas que indicam encadeamento crítico
-    if resultado["energia"] == "crítico" and resultado["comunicacao"] == "crítico":
+    if resultado["energia"] == "crítico" and resultado.get("comunicacao") == "crítico":
         return "CASCATA DETECTADA: Energia crítica comprometeu a comunicação."
-    if resultado["energia"] == "crítico" and resultado["suporte_vida"] == "crítico":
+    if resultado["energia"] == "crítico" and resultado.get("suporte_vida") == "crítico":
         return "CASCATA DETECTADA: Energia crítica comprometeu o suporte à vida."
-    if resultado["energia"] == "crítico" and resultado["habitacao"] == "crítico":
+    if resultado["energia"] == "crítico" and resultado.get("habitacao") == "crítico":
         return "CASCATA: Colapso energético comprometeu o sistema de climatização."
-    if resultado["comunicacao"] == "crítico" and resultado["suporte_vida"] == "crítico":
+    if (
+        resultado.get("comunicacao") == "crítico"
+        and resultado.get("suporte_vida") == "crítico"
+    ):
         return "CASCATA: Sem contato com a Terra e suporte à vida em risco. Emergência máxima."
     if (
-        resultado["suporte_vida"] == "crítico"
-        and resultado["suporte_medico"] == "crítico"
+        resultado.get("suporte_vida") == "crítico"
+        and resultado.get("suporte_medico") == "crítico"
     ):
         return "CASCATA: Falha simultânea no suporte à vida e no atendimento médico. Vidas em perigo."
-    if resultado["energia"] == "alerta" and resultado["comunicacao"] == "crítico":
+    if resultado["energia"] == "alerta" and resultado.get("comunicacao") == "crítico":
         return "CASCATA: Energia baixa acelerou a degradação da comunicação."
     if (
-        resultado["laboratorio"] == "crítico"
-        and resultado["suporte_medico"] == "crítico"
+        resultado.get("laboratorio") == "crítico"
+        and resultado.get("suporte_medico") == "crítico"
     ):
         return "CASCATA: Colapso total dos sistemas científicos e médicos."
-    return None  # nenhuma cascata detectada
+    return None
 
 
 def organizar_turno(dados_turno):
-    # mapeia os dados da linha atual do csv e atualiza a árvore de hierarquia de sistemas da colônia
-    # 1. séries temporais (Listas)
     historico_baterias.append(dados_turno["reserva_pct"])
     historico_geracao_solar.append(dados_turno["geracao_solar_kwh"])
     historico_geracao_eolica.append(dados_turno["geracao_eolica_kwh"])
     historico_consumo.append(dados_turno["consumo_kwh"])
 
-    # 2. atualização completa da árvore hierárquica de sistemas e subsistemas da colônia
     hierarquia_sistemas_colonia["suporte_vida"]["oxigenio"] = dados_turno[
         "mod_suporte_vida"
     ]
@@ -453,13 +466,11 @@ def organizar_turno(dados_turno):
         dados_turno["nivel_estoque_medicamentos_pct"]
     )
 
-    # 3. gerenciamento da pilha de eventos críticos
     if dados_turno["evento_externo"] != "nenhum":
         pilha_eventos_criticos.append(
             f"Turno {dados_turno['turno']} -> {dados_turno['evento_externo'].upper()}"
         )
 
-    # 4. fila de alertas baseada em qualquer módulo secundário que vá para 0
     modulos_secundarios = ["mod_comunicacao", "mod_laboratorio", "mod_suporte_medico"]
     for mod in modulos_secundarios:
         if dados_turno[mod] == 0:
@@ -469,18 +480,93 @@ def organizar_turno(dados_turno):
 
 
 # =====================================================================
+# REQUISITO 8.2: BUSCA RÁPIDA EM DICIONÁRIO / TABELA HASH (Acesso O(1))
+# =====================================================================
+def menu_busca_rapida(hierarquia):
+    """
+    Exibe um menu interativo permitindo acessar os dados finais dos módulos
+    instantaneamente através de busca por chaves de dicionário.
+    """
+    print("\n" + "=" * 85)
+    print("  SISTEMA DE CONSULTA RÁPIDA (ACESSO DIRETO) - STATUS FINAL DOS MÓDULOS  ")
+    print("=" * 85)
+
+    # Mapeamento numérico das opções para as chaves da hierarquia
+    opcoes = {
+        "1": ("Suporte à Vida", "suporte_vida"),
+        "2": ("Energia", "energia"),
+        "3": ("Comunicação", "comunicacao"),
+        "4": ("Habitação", "habitacao"),
+        "5": ("Laboratório", "laboratorio"),
+        "6": ("Suporte Médico", "suporte_medico"),
+    }
+
+    while True:
+        print("\nSelecione o módulo para consultar o status:")
+        for numero, (nome_exibicao, _) in opcoes.items():
+            print(f"  [{numero}] - {nome_exibicao}")
+        print("  [0] - Desligar Terminal e Encerrar")
+
+        escolha = input("\nDigite o número da opção desejada: ").strip()
+
+        if escolha == "0":
+            print("\n[!] Desligando terminais da Colônia Aurora Prime... Até logo!\n")
+            time.sleep(1.0)
+            break
+        elif escolha in opcoes:
+            chave_do_dicionario = opcoes[escolha][1]
+            nome_do_modulo = opcoes[escolha][0]
+
+            # Acesso direto O(1)
+            dados_modulo = hierarquia[chave_do_dicionario]
+
+            print(f"\n--- DADOS DE STATUS: {nome_do_modulo.upper()} ---")
+            for metrica, valor in dados_modulo.items():
+                metrica_formatada = metrica.replace("_", " ").title()
+                print(f"  > {metrica_formatada}: {valor}")
+            print("-" * 45)
+            time.sleep(0.5)
+        else:
+            print("\n[!] Opção inválida. Por favor, escolha um número válido do menu.")
+
+
+# =====================================================================
 # PIPELINE PRINCIPAL (Execução e Exportação)
 # =====================================================================
 def main():
     exibir_introducao_aurora()
 
-    df = pd.read_csv(csv_path)
-    print(f"Matriz de telemetria carregada. ({len(df)} registros para análise).\n")
-    time.sleep(1.0)
+    # TRATAMENTO DE EXCEÇÃO E DATA CLEANSING
+    try:
+        # 1. Lê o ficheiro ignorando os espaços logo após a vírgula
+        df = pd.read_csv(csv_path, skipinitialspace=True)
+
+        # 2. Limpa quaisquer espaços perdidos no início ou fim dos nomes das colunas
+        df.columns = df.columns.str.strip()
+
+        # 3. Limpa os espaços extra nos dados de texto (ex: "aberta   " vira "aberta")
+        for col in df.select_dtypes(["object"]).columns:
+            df[col] = df[col].str.strip()
+
+        print(
+            f"Matriz de telemetria carregada. ({len(df)} registros limpos e prontos para análise).\n"
+        )
+        time.sleep(1.0)
+
+    except FileNotFoundError:
+        print(
+            "\n[!] FALHA CRÍTICA: Link de dados da telemetria (CSV) corrompido ou offline."
+        )
+        print(f"    Caminho procurado: {csv_path}")
+        print(
+            "    Verifique se o arquivo está na pasta 'data/'. Abortando simulação.\n"
+        )
+        return
+    except Exception as e:
+        print(f"\n[!] FALHA CRÍTICA INESPERADA: Ocorreu um erro ao ler os dados -> {e}")
+        return
 
     matriz_telemetria = df.to_dict(orient="records")
-
-    # LISTA PARA EXTRAÇÃO DOS DADOS ORGANIZADOS
     dados_exportacao = []
 
     for turno_atual in matriz_telemetria:
@@ -491,15 +577,11 @@ def main():
         resultado = diagnosticar(hierarquia_sistemas_colonia)
         cascata = detectar_cascata(resultado)
         previsao_energia = calcular_previsao_energia(historico_baterias)
-
         score_atual = calcular_score_saude(
             hierarquia_sistemas_colonia, evento, previsao_energia
         )
-
-        # Chamada atualizada com o score
         lista_acoes = gerar_recomendacoes(resultado, cascata, turno_atual, score_atual)
 
-        # 1. PREPARAÇÃO DOS DADOS PARA A TABELA (VERIFICAÇÃO)
         sol_marciano = ((turno_atual["turno"] - 1) // 6) + 1
         dados_exportacao.append(
             {
@@ -517,7 +599,6 @@ def main():
             }
         )
 
-        # 2. LÓGICA DO PASSO 5: Imprimir no terminal apenas o fecho do dia (04:00) ou eventos críticos
         if turno_atual["hora"] == "04:00" or cascata or score_atual < 40:
             barra_visual = gerar_barra_score(score_atual)
             print(
@@ -544,13 +625,19 @@ def main():
             for acao in lista_acoes:
                 print(f"    {acao}")
 
+            # --- INTEGRAÇÃO DA COMUNICAÇÃO FIFO E DELAY ---
+            print("  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -")
+            resumo_pacote = f"SOL {sol_marciano} | Saúde: {score_atual}% | Bateria: {hierarquia_sistemas_colonia['energia']['armazenamento']:.1f}%"
+            log_comunicacao = gerir_transmissao_terra(
+                hierarquia_sistemas_colonia, turno_atual["cenario"], resumo_pacote
+            )
+            print(log_comunicacao)
+
             print("=" * 85)
             time.sleep(0.1)
 
-    # 3. EXTRAÇÃO FINAL PARA TABELA (CSV)
     print("\n[SIMULAÇÃO CONCLUÍDA] 56 Sóis marcianos processados.")
 
-    # Cria a pasta docs se não existir
     docs_dir = base_dir.parent / "docs"
     docs_dir.mkdir(exist_ok=True)
 
@@ -559,6 +646,9 @@ def main():
     df_exportacao.to_csv(caminho_exportacao, index=False)
 
     print(f"[EXTRAÇÃO] Tabela de auditoria salva com sucesso em: {caminho_exportacao}")
+
+    # --- INÍCIO DO MENU DE CONSULTA O(1) ---
+    menu_busca_rapida(hierarquia_sistemas_colonia)
 
 
 if __name__ == "__main__":
