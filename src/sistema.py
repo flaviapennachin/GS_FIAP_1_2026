@@ -160,6 +160,61 @@ def calcular_previsao_energia(historico_baterias):
 
 
 # =====================================================================
+# REQUISITO 8.4: MOTOR DE DECISÃO (AÇÕES AUTOMÁTICAS E RECOMENDAÇÕES)
+# =====================================================================
+def gerar_recomendacoes(resultado_diagnostico, cascata, dados_turno):
+    """
+    Avalia o diagnóstico de todos os sistemas e gera um plano de ação automatizado,
+    cobrindo energia, comunicação e saúde da tripulação.
+    """
+    acoes = []
+
+    # 1. Prioridade Máxima: Efeito Cascata
+    if cascata:
+        acoes.append(
+            "[!] PROTOCOLO OMEGA: Risco de perda da colônia. Redirecionar toda energia restante para Suporte à Vida."
+        )
+
+    # 2. Resoluções de Energia
+    if resultado_diagnostico.get("energia") == "crítico":
+        acoes.append(
+            "-> Protocolo de Economia Severa: Desligar Laboratório e hibernar aquecimento secundário."
+        )
+    elif resultado_diagnostico.get("energia") == "alerta":
+        acoes.append(
+            "-> Ajuste de Carga: Monitorar baterias de perto e preparar desligamento de módulos não essenciais."
+        )
+
+    # 3. Resoluções Médicas e de Saúde (Atendendo à sua ideia de usar as métricas)
+    if resultado_diagnostico.get("suporte_medico") == "crítico":
+        acoes.append(
+            "-> Emergência Médica: Sistemas de monitoramento inoperantes. Realizar checagem manual da tripulação."
+        )
+    elif dados_turno.get("sinais_vitais_tripulantes_pct", 100) < 90:
+        # Se os sinais vitais caírem por stress (ex: durante o micrometeoro)
+        acoes.append(
+            "-> Atenção Tripulação: Sinais vitais em queda. Distribuir kit médico e aplicar protocolo anti-stress."
+        )
+
+    # 4. Resoluções de Comunicação
+    if resultado_diagnostico.get("comunicacao") == "crítico":
+        if dados_turno.get("janela_comunicacao") == "fechada":
+            acoes.append(
+                "-> Isolamento Tático: Executar rotinas de manutenção 100% autônomas até a reabertura da janela orbital."
+            )
+        else:
+            acoes.append(
+                "-> Falha de Link: Reiniciar módulo de satélite e recalibrar antenas de rádio/laser."
+            )
+
+    # 5. Se tudo estiver nominal
+    if len(acoes) == 0:
+        acoes.append("-> Sistemas estáveis. Manter operações de rotina.")
+
+    return acoes
+
+
+# =====================================================================
 # REQUISITO 8.3: MOTOR DE DIAGNÓSTICO — REGRAS LÓGICAS
 # =====================================================================
 def diagnosticar(hierarquia_sistemas_colonia):
@@ -380,6 +435,7 @@ def main():
         resultado = diagnosticar(hierarquia_sistemas_colonia)
         cascata = detectar_cascata(resultado)
         previsao_energia = calcular_previsao_energia(historico_baterias)
+        lista_acoes = gerar_recomendacoes(resultado, cascata, turno_atual)
 
         # Painel de monitoramento operacional completo
         print(
@@ -408,6 +464,11 @@ def main():
 
         if cascata:
             print(f"  Alerta de cascata!: {cascata}")
+
+        # Imprimindo as recomendações geradas
+        print("\n  [PLANO DE AÇÃO AUTOMATIZADO]:")
+        for acao in lista_acoes:
+            print(f"    {acao}")
         print("-" * 85)
         time.sleep(0.05)
 
