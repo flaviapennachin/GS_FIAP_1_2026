@@ -16,7 +16,7 @@ historico_baterias = []                 # monitoramento de ciclos de carga
 historico_geracao_solar = []            # análise de eficiência energética
 historico_geracao_eolica = []           # análise de eficiência energética    
 historico_consumo = []                  # análise de eficiência energética
-historico_temperatura = []              
+historico_temperatura = []              # histórico de leituras válidas de temperatura interna
 
 #DICIONÁRIO DE SISTEMAS E SUBSISTEMAS  
 # hierarquia de sistemas e subsistemas para monitoramento e controle operacional
@@ -71,9 +71,13 @@ def exibir_introducao_aurora():
     print("\nIniciando matriz de telemetria histórica...")
     print("-" * 85)
     time.sleep(1.8) 
-    
-def processar_evento_externo(turno):
 
+# =====================================================================
+# REQUISITO 8.3 / 8.4: MOTOR DE EVENTOS EXTERNOS
+# =====================================================================
+
+def processar_evento_externo(turno):
+    # classifica o evento externo do turno e retorna descrição do impacto operacional
     if turno["evento_externo"] == "nenhum":
         return "Sem eventos externos. Operação nominal."
     elif turno["evento_externo"] == "tempestade_areia":
@@ -85,7 +89,12 @@ def processar_evento_externo(turno):
     else:
         return "Um evento externo não identificado acaba de ocorrer"
 
+# =====================================================================
+# REQUISITO 8.3 (NEXT): PROTOCOLO DE VOTAÇÃO DE SENSORES
+# =====================================================================
+
 def votar_sensor(historico_temperatura, turno_atual):
+    # detecta leitura inválida (-999) e estima valor real pela média histórica
     if turno_atual["temp_interna"] == -999:
         if len(historico_temperatura) == 0:
             return "Sensor falho e sem histórico disponível para recuperação."
@@ -96,13 +105,18 @@ def votar_sensor(historico_temperatura, turno_atual):
             media = soma/len(historico_temperatura)
             return f"[VOTAÇÃO] Sensor falho. Valor estimado por média histórica: {media:.1f}°C"
     else:
+        # leitura válida: registra no histórico e retorna o valor atual
         historico_temperatura.append(turno_atual["temp_interna"])
         return f"Temperatura interna: {turno_atual['temp_interna']:.1f}°C"
-       
+
+# =====================================================================
+# REQUISITO 8.3: MOTOR DE DIAGNÓSTICO — REGRAS LÓGICAS
+# =====================================================================
+      
 def diagnosticar(hierarquia_sistemas_colonia):
-
+    # avalia cada sistema da colônia e classifica em normal, alerta ou crítico
     resultado = {}
-
+    # extração de variáveis para legibilidade
     radio = hierarquia_sistemas_colonia["comunicacao"]["radio"]*100
     laser = hierarquia_sistemas_colonia["comunicacao"]["laser"]*100
     energia_armazenada = hierarquia_sistemas_colonia["energia"]["armazenamento"]
@@ -122,54 +136,62 @@ def diagnosticar(hierarquia_sistemas_colonia):
     monitoramento_saude = hierarquia_sistemas_colonia["suporte_medico"]["monitoramento_saude"]    # 0 ou 1
     estoque_medicamentos = hierarquia_sistemas_colonia["suporte_medico"]["estoque_medicamentos"]   # 0 ou 1
 
+    # diagnóstico de energia: normal >= 50%, alerta >= 20%, crítico < 20%
     if energia_armazenada <=100 and energia_armazenada >=50:
         resultado["energia"] = "normal"
     elif energia_armazenada < 50 and energia_armazenada >=20:
         resultado["energia"] = "alerta"
     else:
         resultado["energia"] = "crítico"
-
+    # diagnóstico de comunicação: baseado em sinal de rádio e laser (0-100)
     if radio >= 50 and laser >=50:
         resultado["comunicacao"] = "normal"
     elif radio >= 20 and laser >=20:
         resultado["comunicacao"] = "alerta"
     else:
         resultado['comunicacao'] = "crítico"
+    # módulo de satélite desligado força status crítico independente dos sinais
     if not sattelite == 1:
         resultado["comunicacao"] = "crítico"
-
+    # diagnóstico de suporte à vida: baseado em reservas de água e alimentos
     if agua >=70 and alimentos >=70:
         resultado["suporte_vida"] = "normal"
     elif agua >=40 and alimentos >=40:
         resultado["suporte_vida"] = "alerta"
     else:
         resultado["suporte_vida"] = "crítico"
-
+    # falha no oxigênio força status crítico independente das reservas
     if not oxigenio == 1:
         resultado["suporte_vida"] = "crítico"
-    
+    # diagnóstico de habitação: baseado na temperatura interna (°C)
     if temperatura_interna >=18 and temperatura_interna <= 26:
         resultado["habitacao"] = "normal"
     elif (temperatura_interna >= 10 and temperatura_interna <= 18) or (temperatura_interna >= 26 and temperatura_interna <= 35):
         resultado["habitacao"] = "alerta"
     elif temperatura_interna < 10  or temperatura_interna > 35:
         resultado["habitacao"] = "crítico"
-
+    # falha no climatizador ou módulo habitacional força status crítico
     if (not sistema_climatizacao == 1) or (not modulo_habitacional == 1):
         resultado["habitacao"] = "crítico"
-    
+    # diagnóstico de laboratório: crítico se qualquer estação estiver inoperante
     if (not analise_solo == 1) or (not analise_biologica == 1):
         resultado["laboratorio"] = "crítico"
     else:
         resultado["laboratorio"] = "normal"
-    
+    # diagnóstico de suporte médico: crítico se qualquer subsistema estiver inoperante
     if (not monitoramento_saude == 1) or (not estoque_medicamentos == 1):
         resultado["suporte_medico"] = "crítico"
     else:
         resultado["laboratorio"] = "normal"
+
     return resultado
-    
+
+# =====================================================================
+# REQUISITO 8.4: DETECÇÃO DE FALHAS EM CASCATA
+# =====================================================================
+
 def detectar_cascata(resultado):
+# verifica combinações de falhas simultâneas que indicam encadeamento crítico
     if resultado["energia"] == "crítico" and resultado["comunicacao"] == "crítico":
         return "CASCATA DETECTADA: Energia crítica comprometeu a comunicação."
     if resultado["energia"] == "crítico" and resultado["suporte_vida"] == "crítico":
@@ -184,7 +206,7 @@ def detectar_cascata(resultado):
         return "CASCATA: Energia baixa acelerou a degradação da comunicação."
     if resultado["laboratorio"] == "crítico" and resultado["suporte_medico"] == "crítico":
         return "CASCATA: Colapso total dos sistemas científicos e médicos."
-    return None
+    return None # nenhuma cascata detectada
     
     
     
