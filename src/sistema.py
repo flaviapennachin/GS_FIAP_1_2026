@@ -16,6 +16,7 @@ historico_baterias = []                 # monitoramento de ciclos de carga
 historico_geracao_solar = []            # análise de eficiência energética
 historico_geracao_eolica = []           # análise de eficiência energética    
 historico_consumo = []                  # análise de eficiência energética
+historico_temperatura = []              
 
 #DICIONÁRIO DE SISTEMAS E SUBSISTEMAS  
 # hierarquia de sistemas e subsistemas para monitoramento e controle operacional
@@ -71,7 +72,122 @@ def exibir_introducao_aurora():
     print("-" * 85)
     time.sleep(1.8) 
     
+def processar_evento_externo(turno):
 
+    if turno["evento_externo"] == "nenhum":
+        return "Sem eventos externos. Operação nominal."
+    elif turno["evento_externo"] == "tempestade_areia":
+        return "Tempestade de areia detectada. Geração solar comprometida e visibilidade reduzida"
+    elif turno["evento_externo"] == "tempestade_solar":
+        return "Tempestade solar em curso. Comunicação instável e radiação elevada."
+    elif turno["evento_externo"] == "micrometeoro":
+        return "Impacto de micrometeoro detectado. Possível falha de sensor."
+    else:
+        return "Um evento externo não identificado acaba de ocorrer"
+
+def votar_sensor(historico_temperatura, turno_atual):
+    if turno_atual["temp_interna"] == -999:
+        if len(historico_temperatura) == 0:
+            return "Sensor falho e sem histórico disponível para recuperação."
+        else:
+            soma = 0
+            for temp in historico_temperatura:
+                soma += temp
+            media = soma/len(historico_temperatura)
+            return f"[VOTAÇÃO] Sensor falho. Valor estimado por média histórica: {media:.1f}°C"
+    else:
+        historico_temperatura.append(turno_atual["temp_interna"])
+        return f"Temperatura interna: {turno_atual['temp_interna']:.1f}°C"
+       
+def diagnosticar(hierarquia_sistemas_colonia, turno_atual):
+
+    resultado = {}
+
+    radio = hierarquia_sistemas_colonia["comunicacao"]["radio"]*100
+    laser = hierarquia_sistemas_colonia["comunicacao"]["laser"]*100
+    energia_armazenada = hierarquia_sistemas_colonia["energia"]["armazenamento"]
+    sattelite = hierarquia_sistemas_colonia["comunicacao"]["satellite"]
+
+    oxigenio = hierarquia_sistemas_colonia["suporte_vida"]["oxigenio"]
+    agua = hierarquia_sistemas_colonia["suporte_vida"]["agua"]*100
+    alimentos = hierarquia_sistemas_colonia["suporte_vida"]["alimentos"]*100
+
+    modulo_habitacional = hierarquia_sistemas_colonia["habitacao"]["modulo_habitacional"]
+    sistema_climatizacao = hierarquia_sistemas_colonia["habitacao"]["sistema_climatizacao"]
+    temperatura_interna = hierarquia_sistemas_colonia["habitacao"]["temperatura_interna"]
+
+    analise_solo = hierarquia_sistemas_colonia["laboratorio"]["analise_solo"]       # 0 ou 1
+    analise_biologica = hierarquia_sistemas_colonia["laboratorio"]["analise_biologica"]  # 0 ou 1
+
+    monitoramento_saude = hierarquia_sistemas_colonia["suporte_medico"]["monitoramento_saude"]    # 0 ou 1
+    estoque_medicamentos = hierarquia_sistemas_colonia["suporte_medico"]["estoque_medicamentos"]   # 0 ou 1
+
+    if energia_armazenada <=100 and energia_armazenada >=50:
+        resultado["energia"] = "normal"
+    elif energia_armazenada < 50 and energia_armazenada >=20:
+        resultado["energia"] = "alerta"
+    else:
+        resultado["energia"] = "crítico"
+
+    if radio >= 50 and laser >=50:
+        resultado["comunicacao"] = "normal"
+    elif radio >= 20 and laser >=20:
+        resultado["comunicacao"] = "alerta"
+    else:
+        resultado['comunicacao'] = "crítico"
+    if not sattelite == 1:
+        resultado["comunicacao"] = "crítico"
+
+    if agua >=70 and alimentos >=70:
+        resultado["suporte_vida"] = "normal"
+    elif agua >=40 and alimentos >=40:
+        resultado["suporte_vida"] = "alerta"
+    else:
+        resultado["suporte_vida"] = "crítico"
+
+    if not oxigenio == 1:
+        resultado["suporte_vida"] = "crítico"
+    
+    if temperatura_interna >=18 and temperatura_interna <= 26:
+        resultado["habitacao"] = "normal"
+    elif (temperatura_interna >= 10 and temperatura_interna <= 18) or (temperatura_interna >= 26 and temperatura_interna <= 35):
+        resultado["habitacao"] = "alerta"
+    elif temperatura_interna < 10  or temperatura_interna > 35:
+        resultado["habitacao"] = "crítico"
+
+    if (not sistema_climatizacao == 1) or (not modulo_habitacional == 1):
+        resultado["habitacao"] = "crítico"
+    
+    if (not analise_solo == 1) or (not analise_biologica == 1):
+        resultado["laboratorio"] = "crítico"
+    else:
+        resultado["laboratorio"] = "normal"
+    
+    if (not monitoramento_saude == 1) or (not estoque_medicamentos == 1):
+        resultado["suporte_medico"] = "crítico"
+    else:
+        resultado["laboratorio"] = "normal"
+    return resultado
+    
+def detectar_cascata(resultado):
+    if resultado["energia"] == "crítico" and resultado["comunicacao"] == "crítico":
+        return "CASCATA DETECTADA: Energia crítica comprometeu a comunicação."
+    if resultado["energia"] == "crítico" and resultado["suporte_vida"] == "crítico":
+        return "CASCATA DETECTADA: Energia crítica comprometeu o suporte à vida."
+    if resultado["energia"] == "crítico" and resultado["habitacao"] == "crítico":
+        return "CASCATA: Colapso energético comprometeu o sistema de climatização."
+    if resultado["comunicacao"] == "crítico" and resultado["suporte_vida"] == "crítico":
+        return "CASCATA: Sem contato com a Terra e suporte à vida em risco. Emergência máxima."
+    if resultado["suporte_vida"] == "crítico" and resultado["suporte_medico"] == "crítico":
+        return "CASCATA: Falha simultânea no suporte à vida e no atendimento médico. Vidas em perigo."
+    if resultado["energia"] == "alerta" and resultado["comunicacao"] == "crítico":
+        return "CASCATA: Energia baixa acelerou a degradação da comunicação."
+    if resultado["laboratorio"] == "crítico" and resultado["suporte_medico"] == "crítico":
+        return "CASCATA: Colapso total dos sistemas científicos e médicos."
+    return None
+    
+    
+    
 def organizar_turno(dados_turno): 
     # mapeia os dados da linha atual do csv e atualiza a árvore de hierarquia de sistemas da colônia
     
@@ -131,6 +247,11 @@ def main():
     for turno_atual in matriz_telemetria:
         organizar_turno(turno_atual)
         
+        evento = processar_evento_externo(turno_atual)
+        sensor = votar_sensor(historico_temperatura, turno_atual)
+        resultado = diagnosticar(hierarquia_sistemas_colonia,turno_atual)
+        cascata = detectar_cascata(resultado)
+
        # Painel de monitoramento operacional completo
         print(f"» SOL-TURNO: {turno_atual['turno']:03d} | Horário: {turno_atual['hora']} | Cenário: {turno_atual['cenario']}")
         print(f"  Geração Solar Atual: {hierarquia_sistemas_colonia['energia']['solar']:.2f} kWh")
@@ -140,7 +261,11 @@ def main():
         print(f"  Alertas - Quantidade Atual: {len(fila_alertas)}")
         print(f"  Último Evento Crítico: {pilha_eventos_criticos[-1] if pilha_eventos_criticos else 'Nenhum'}")
         print("-" * 85)
-        
+        print(f"  Evento Externo: {evento}")
+        print(f"  Sensor Temperatura: {sensor}")
+        print(f"  Diagnóstico: {resultado}")
+        if cascata:
+            print(f"  Alerta de cascata!: {cascata}")
         time.sleep(0.05) 
 
     print("\n[SIMULAÇÃO CONCLUÍDA] 56 Sóis marcianos processados com sucesso.")
