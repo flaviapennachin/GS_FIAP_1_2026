@@ -2,5 +2,5 @@
 pandas==2.2.2
 
 # Dependências da Camada 5 (Previsão Matemática e Regressão)
+# Nota: regressão linear implementada com np.polyfit (NumPy puro), sem scikit-learn
 numpy==1.26.4
-scikit-learn==1.5.0

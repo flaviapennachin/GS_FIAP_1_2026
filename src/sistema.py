@@ -329,16 +329,19 @@ def diagnosticar(hierarquia_sistemas_colonia):
     else:
         resultado["energia"] = "crítico"
 
+    # EXPRESSÃO BOOLEANA: comunicação normal apenas se rádio AND laser ambos acima de 50%
     if radio >= 50 and laser >= 50:
         resultado["comunicacao"] = "normal"
-    elif radio >= 20 and laser >= 20:
+    elif radio >= 20 and laser >= 20:  # degradação parcial: alerta se ambos acima de 20%
         resultado["comunicacao"] = "alerta"
-    else:
+    else:  # qualquer canal abaixo de 20% → crítico
         resultado["comunicacao"] = "crítico"
 
+    # EXPRESSÃO BOOLEANA: NOT satélite — falha forçada para crítico independente dos demais canais
     if not sattelite == 1:
         resultado["comunicacao"] = "crítico"
 
+    # EXPRESSÃO BOOLEANA: suporte_vida normal apenas se água AND alimentos acima de 70%
     if agua >= 70 and alimentos >= 70:
         resultado["suporte_vida"] = "normal"
     elif agua >= 40 and alimentos >= 40:
@@ -346,6 +349,7 @@ def diagnosticar(hierarquia_sistemas_colonia):
     else:
         resultado["suporte_vida"] = "crítico"
 
+    # EXPRESSÃO BOOLEANA: NOT oxigenio — falha de O2 é sempre crítica, ignorando água/alimentos
     if not oxigenio == 1:
         resultado["suporte_vida"] = "crítico"
 
@@ -501,6 +505,13 @@ def menu_busca_rapida(hierarquia):
         "6": ("Suporte Médico", "suporte_medico"),
     }
 
+    # REQUISITO PILHA (LIFO): exibir o último evento crítico registrado ao entrar no menu
+    # .pop() remove e retorna o elemento do TOPO da pilha (Last In, First Out)
+    if pilha_eventos_criticos:
+        ultimo_evento = pilha_eventos_criticos.pop()
+        print(f"\n  [PILHA LIFO] Último evento crítico registrado: {ultimo_evento}")
+        print("  (Removido do topo da pilha para consulta — comportamento LIFO)")
+
     while True:
         print("\nSelecione o módulo para consultar o status:")
         for numero, (nome_exibicao, _) in opcoes.items():
@@ -567,6 +578,17 @@ def main():
         return
 
     matriz_telemetria = df.to_dict(orient="records")
+
+    # REQUISITO MATRIZ/LISTA DE LISTAS: estrutura 2D explícita com leituras por horário e variável
+    # Formato: matriz_horarios[indice_turno][indice_variavel] → valor da variável no turno
+    # Colunas selecionadas para a matriz 2D:
+    VARIAVEIS_MATRIZ = ["hora", "reserva_pct", "geracao_solar_kwh", "geracao_eolica_kwh", "consumo_kwh", "temp_interna"]
+    # lista[horario][variavel]: cada linha = 1 turno; cada coluna = 1 variável
+    matriz_horarios = [
+        [turno.get(var, None) for var in VARIAVEIS_MATRIZ]
+        for turno in matriz_telemetria
+    ]
+    # Exemplo de acesso: matriz_horarios[0][1] → reserva_pct do turno 1
     dados_exportacao = []
 
     for turno_atual in matriz_telemetria:
