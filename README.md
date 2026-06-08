@@ -23,13 +23,31 @@ A Missão Aurora Prime representa o estágio mais avançado da presença humana 
 
 ## 🧠 Arquitetura do Sistema (As 5 Camadas APCS)
 O código-fonte (`sistema.py`) foi desenvolvido com base em Engenharia de Software robusta, dividido em 5 motores lógicos que processam 56 Sóis marcianos (336 turnos) de forma autônoma:
+<br>
+<br>
 
-1. **Camada de Ingestão e Cleansing:** Utiliza `Pandas` envolto num bloco `try/except` para ler a telemetria, aspirar espaços em branco (Data Cleansing) e evitar quebras críticas caso o sensor de dados fique offline.
-2. **Motor de Eventos e Votação:** Avalia intempéries (Tempestades Solares, Micrometeoros). Possui um sistema de **Votação de Sensores** que, ao detectar dados corrompidos (ex: `-999°C`), calcula a média histórica para evitar alarmes falsos.
+  ![Imagem da camada 1](docs/camada_1.jpg)
+  Utiliza `Pandas` envolto num bloco `try/except` para ler a telemetria, aspirar espaços em branco (Data Cleansing) e evitar quebras críticas caso o sensor de dados fique offline.
+<br>
+<br>
+
    ![Imagem da camada 2](docs/camada_2.jpg)
-4. **Motor de Diagnóstico (Cascata):** Avalia a árvore de sistemas em tempo real (Energia, Habitação, Medicina). Cruza variáveis para detectar o temido "Efeito Cascata" (quando a falha de um módulo compromete a sobrevivência).
-5. **Motor de Previsão e Score (NumPy):** Aplica Regressão Linear Simples (`np.polyfit`) sobre as leituras recentes das baterias para prever matematicamente o colapso. Gera o **Score de Saúde (0-100%)**, ponderando energia, integridade dos módulos e clima.
-6. **Motor de Decisão e Comunicação:** Formula um plano de ação diário (desligar módulos, distribuir kits médicos). Gerencia o protocolo **DTN (Delay-Tolerant Networking)**, calculando o *Time of Flight* da luz para enviar mensagens à Terra via Laser ou Rádio.
+   Avalia intempéries (Tempestades Solares, Micrometeoros). Possui um sistema de **Votação de Sensores** que, ao detectar dados corrompidos (ex: `-999°C`), calcula a média histórica para evitar alarmes falsos.
+<br>
+<br>
+
+  ![Imagem da camada 3](docs/camada_3.jpg)
+  Avalia a árvore de sistemas em tempo real (Energia, Habitação, Medicina). Cruza variáveis para detectar o temido "Efeito Cascata" (quando a falha de um módulo compromete a sobrevivência).
+<br>
+<br>
+
+  ![Imagem da camada 4](docs/camada_4.jpg)
+  Aplica Regressão Linear Simples (`np.polyfit`) sobre as leituras recentes das baterias para prever matematicamente o colapso. Gera o **Score de Saúde (0-100%)**, ponderando energia, integridade dos módulos e clima.
+<br>
+<br>
+
+  ![Imagem da camada 5](docs/camada_5.jpg)
+  Formula um plano de ação diário (desligar módulos, distribuir kits médicos). Gerencia o protocolo **DTN (Delay-Tolerant Networking)**, calculando o *Time of Flight* da luz para enviar mensagens à Terra via Laser ou Rádio.
 
 ---
 
