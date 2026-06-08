@@ -26,9 +26,10 @@ O código-fonte (`sistema.py`) foi desenvolvido com base em Engenharia de Softwa
 
 1. **Camada de Ingestão e Cleansing:** Utiliza `Pandas` envolto num bloco `try/except` para ler a telemetria, aspirar espaços em branco (Data Cleansing) e evitar quebras críticas caso o sensor de dados fique offline.
 2. **Motor de Eventos e Votação:** Avalia intempéries (Tempestades Solares, Micrometeoros). Possui um sistema de **Votação de Sensores** que, ao detectar dados corrompidos (ex: `-999°C`), calcula a média histórica para evitar alarmes falsos.
-3. **Motor de Diagnóstico (Cascata):** Avalia a árvore de sistemas em tempo real (Energia, Habitação, Medicina). Cruza variáveis para detectar o temido "Efeito Cascata" (quando a falha de um módulo compromete a sobrevivência).
-4. **Motor de Previsão e Score (NumPy):** Aplica Regressão Linear Simples (`np.polyfit`) sobre as leituras recentes das baterias para prever matematicamente o colapso. Gera o **Score de Saúde (0-100%)**, ponderando energia, integridade dos módulos e clima.
-5. **Motor de Decisão e Comunicação:** Formula um plano de ação diário (desligar módulos, distribuir kits médicos). Gerencia o protocolo **DTN (Delay-Tolerant Networking)**, calculando o *Time of Flight* da luz para enviar mensagens à Terra via Laser ou Rádio.
+   ![Imagem da camada 2](docs/camada_2.jpg)
+4. **Motor de Diagnóstico (Cascata):** Avalia a árvore de sistemas em tempo real (Energia, Habitação, Medicina). Cruza variáveis para detectar o temido "Efeito Cascata" (quando a falha de um módulo compromete a sobrevivência).
+5. **Motor de Previsão e Score (NumPy):** Aplica Regressão Linear Simples (`np.polyfit`) sobre as leituras recentes das baterias para prever matematicamente o colapso. Gera o **Score de Saúde (0-100%)**, ponderando energia, integridade dos módulos e clima.
+6. **Motor de Decisão e Comunicação:** Formula um plano de ação diário (desligar módulos, distribuir kits médicos). Gerencia o protocolo **DTN (Delay-Tolerant Networking)**, calculando o *Time of Flight* da luz para enviar mensagens à Terra via Laser ou Rádio.
 
 ---
 
