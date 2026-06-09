@@ -59,7 +59,7 @@ hierarquia_sistemas_colonia = {
 # =====================================================================
 base_dir = Path(__file__).resolve().parent
 # csv_path = base_dir.parent / "data" / "dados_telemetria_marte.csv"
-csv_path = base_dir.parent / "data" / "GS - All Data.csv"
+csv_path = base_dir.parent / "data" / "dados_telemetria_marte.csv"
 
 
 def exibir_introducao_aurora():
